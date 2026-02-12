@@ -2,14 +2,36 @@
  * Very small fetch wrapper used by the calendar UI.
  * - Normalizes errors (status code, message)
  * - Supports optional base URL override via REACT_APP_API_BASE_URL
+ *
+ * Integration note (Kavia preview):
+ * - The frontend typically runs on :3000 and the backend on :3001.
+ * - In preview/dev, we auto-target :3001 unless REACT_APP_API_BASE_URL is set.
+ * - In production (same-origin behind a reverse proxy), default is "".
  */
 
 const DEFAULT_BASE_URL = ""; // same-origin by default (works behind reverse proxy)
 
 // PUBLIC_INTERFACE
 export function getApiBaseUrl() {
-  /** Returns the API base URL from environment, defaulting to same-origin. */
-  return (process.env.REACT_APP_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
+  /** Returns the API base URL from environment, defaulting to same-origin (or :3001 in preview). */
+  const explicit = (process.env.REACT_APP_API_BASE_URL || "").trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+
+  // Auto-detect Kavia/CRA preview setup: frontend :3000, backend :3001
+  if (typeof window !== "undefined" && window.location?.origin) {
+    try {
+      const url = new URL(window.location.origin);
+      // If the frontend is on port 3000, assume backend is on 3001.
+      if (url.port === "3000") {
+        url.port = "3001";
+        return url.toString().replace(/\/$/, "");
+      }
+    } catch {
+      // ignore and fall back
+    }
+  }
+
+  return DEFAULT_BASE_URL.replace(/\/$/, "");
 }
 
 async function readResponseBodySafe(res) {
